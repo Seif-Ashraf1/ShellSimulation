@@ -1,0 +1,199 @@
+#include <gtk/gtk.h>
+#include <stdlib.h>
+#include <string.h>
+
+char path[100], dest[100], command[200];
+GtkWidget *output_view;
+
+// Appends text to the output text view
+void append_output(const char *msg) {
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(output_view));
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+    gtk_text_buffer_insert(buffer, &end, msg, -1);
+    gtk_text_buffer_insert(buffer, &end, "\n", -1);
+}
+
+// Displays an input dialog to get user input
+void get_input_dialog(const char *prompt, char *result) {
+    GtkWidget *dialog, *content_area, *entry;
+    GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+
+    dialog = gtk_dialog_new_with_buttons(prompt,
+                                         NULL,
+                                         flags,
+                                         "_OK",
+                                         GTK_RESPONSE_OK,
+                                         NULL);
+    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    entry = gtk_entry_new();
+    gtk_container_add(GTK_CONTAINER(content_area), entry);
+    gtk_widget_show_all(dialog);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK) {
+        const char *text = gtk_entry_get_text(GTK_ENTRY(entry));
+        strcpy(result, text);
+    } else {
+        strcpy(result, "");
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+// Executes a shell command based on user's menu selection
+void run_command(int choice) {
+    switch (choice) {
+        case 1: // Copy file
+            strcpy(command, "sh -c \"cp ");
+            get_input_dialog("Enter Source File:", path);
+            strcat(command, path);
+            strcat(command, " ");
+            get_input_dialog("Enter Destination File:", dest);
+            strcat(command, dest);
+            strcat(command, "\"");
+            system(command);
+            append_output("File copied.");
+            break;
+
+        case 2: // Move file
+            strcpy(command, "mv ");
+            get_input_dialog("Enter Source File:", path);
+            strcat(command, path);
+            strcat(command, " ");
+            get_input_dialog("Enter Destination File:", dest);
+            strcat(command, dest);
+            system(command);
+            append_output("File moved.");
+            break;
+
+        case 3: // Create directory
+            get_input_dialog("Enter Directory Path:", path);
+            get_input_dialog("Enter Directory Name:", dest);
+            strcpy(command, "cd ");
+            strcat(command, path);
+            strcat(command, " && mkdir -p ");
+            strcat(command, dest);
+            if (system(command) == 0)
+                append_output("Directory created.");
+            else
+                append_output("Failed to create directory.");
+            break;
+
+        case 4: // List directory contents
+            strcpy(command, "ls ");
+            get_input_dialog("Enter Directory Path:", path);
+            strcat(command, path);
+            system(command);
+            append_output("Listed directory contents.");
+            break;
+
+        case 5: // Remove file or directory
+            strcpy(command, "rm ");
+            get_input_dialog("Enter File or Directory to Remove:", path);
+            strcat(command, path);
+            system(command);
+            append_output("Removed file or directory.");
+            break;
+
+        case 6: // Change directory (non-persistent)
+            strcpy(command, "cd ");
+            get_input_dialog("Enter Directory to Change Into:", path);
+            strcat(command, path);
+            system(command);
+            append_output("Changed directory (note: not persistent).");
+            break;
+
+        case 7: // Show current directory
+            strcpy(command, "pwd");
+            system(command);
+            append_output("Displayed current directory.");
+            break;
+
+        case 8: // Show file type
+            strcpy(command, "file ");
+            get_input_dialog("Enter File Name:", path);
+            strcat(command, path);
+            system(command);
+            append_output("Displayed file type.");
+            break;
+
+        case 9: // Create symbolic link
+            strcpy(command, "ln -s ");
+            get_input_dialog("Enter Target File Path:", path);
+            strcat(command, path);
+            strcat(command, " ");
+            get_input_dialog("Enter Shortcut Path:", dest);
+            strcat(command, dest);
+            system(command);
+            append_output("Created symbolic link.");
+            break;
+
+        case 10: // Exit program
+            gtk_main_quit();
+            break;
+
+        default:
+            append_output("Invalid option.");
+    }
+}
+
+// Callback when a button is clicked
+void on_button_clicked(GtkWidget *widget, gpointer data) {
+    int choice = GPOINTER_TO_INT(data);
+    run_command(choice);
+}
+
+// Creates a grid of menu buttons
+void create_menu_grid(GtkWidget *box) {
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+
+    const char *labels[] = {
+        "1. Copy File", "2. Move File", "3. Create Directory", "4. List Directory",
+        "5. Remove File/Dir", "6. Change Directory", "7. PWD", "8. File Type",
+        "9. Make Shortcut", "10. Exit"
+    };
+
+    int i;
+    for (i = 0; i < 10; i++) {
+        GtkWidget *btn = gtk_button_new_with_label(labels[i]);
+        g_signal_connect(btn, "clicked", G_CALLBACK(on_button_clicked), GINT_TO_POINTER(i + 1));
+        gtk_grid_attach(GTK_GRID(grid), btn, i % 2, i / 2, 1, 1);
+    }
+
+    gtk_box_pack_start(GTK_BOX(box), grid, FALSE, FALSE, 10);
+}
+
+int main(int argc, char *argv[]) {
+    gtk_init(&argc, &argv);
+
+    // Create main window
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "Shell Simulation GUI");
+    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    // Create vertical box container for widgets
+    GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_container_add(GTK_CONTAINER(window), main_box);
+
+    // Add grid of buttons
+    create_menu_grid(main_box);
+
+    // Add scrollable text view for output
+    output_view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(output_view), FALSE);
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scrolled), output_view);
+    gtk_widget_set_vexpand(scrolled, TRUE);
+    gtk_box_pack_end(GTK_BOX(main_box), scrolled, TRUE, TRUE, 10);
+
+    // Show all widgets
+    gtk_widget_show_all(window);
+
+    // Start GTK main loop
+    gtk_main();
+
+    return 0;
+}
